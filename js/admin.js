@@ -44,6 +44,36 @@
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const read = (key, fallback) => { try { const value = JSON.parse(localStorage.getItem(key)); return value ?? fallback; } catch { return fallback; } };
   const write = (key, value) => localStorage.setItem(key, JSON.stringify(value));
+  const API_BASE = '/api';
+  const isLocalPreview = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+  let serverMode = false;
+  const api = async (path, options = {}) => {
+    const response = await fetch(`${API_BASE}${path}`, {
+      credentials: 'same-origin',
+      ...options,
+      headers: { ...(options.body ? { 'content-type': 'application/json' } : {}), ...(options.headers || {}) }
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
+    return body;
+  };
+  const normaliseServerState = state => {
+    rates = (state.rates || []).map(item => ({ ...item, price: Number(item.price || 0), eb: Number(item.eb || 0) }));
+    rooms = (state.rooms || []).map(item => ({ ...item, available: Boolean(item.available) }));
+    gallery = (state.gallery || []).map(item => ({ ...item, created: item.created || item.created_at }));
+    bookings = (state.bookings || []).map(item => ({ ...item, created: item.created || item.created_at }));
+    settings = { ...defaults.settings, ...(state.settings || {}) };
+    write(KEYS.rates, rates); write(KEYS.rooms, rooms); write(KEYS.gallery, gallery); write(KEYS.bookings, bookings); write(KEYS.settings, settings);
+  };
+  const loadServerState = async () => {
+    const state = await api('/admin/data');
+    normaliseServerState(state);
+    serverMode = true;
+  };
+  const saveResource = async (resource, data) => {
+    if (!serverMode) return;
+    await api('/admin/data', { method: 'PUT', body: JSON.stringify({ resource, data }) });
+  };
   const money = value => `₹${Number(value || 0).toLocaleString('en-IN')}`;
   const date = value => value ? new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short' }).format(new Date(`${value}T00:00:00`)) : '—';
   const initials = name => (name || 'NP').split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase();
@@ -61,11 +91,42 @@
 
   const loginView = $('#loginView');
   const adminApp = $('#adminApp');
-  const showApp = () => { loginView.hidden = true; adminApp.hidden = false; $('#adminUserLabel').textContent = localStorage.getItem(KEYS.session) || 'admin'; renderAll(); };
+  const showApp = async () => {
+    loginView.hidden = true; adminApp.hidden = false;
+    $('#adminUserLabel').textContent = localStorage.getItem(KEYS.session) || 'admin';
+    try {
+      await loadServerState();
+    } catch (error) {
+      serverMode = false;
+      if (!isLocalPreview) {
+        localStorage.removeItem(KEYS.session);
+        showLogin();
+        $('#loginError').textContent = error.message || 'Could not connect to the admin service.';
+        return;
+      }
+      toast('Local demo mode — connect Cloudflare to persist changes');
+    }
+    renderAll();
+  };
   const showLogin = () => { loginView.hidden = false; adminApp.hidden = true; };
   if (localStorage.getItem(KEYS.session)) showApp();
-  $('#loginForm')?.addEventListener('submit', event => { event.preventDefault(); const user = $('#loginUser').value.trim(); const password = $('#loginPassword').value.trim(); if (!user || !password) { $('#loginError').textContent = 'Enter both username and password to continue.'; return; } localStorage.setItem(KEYS.session, user); $('#loginError').textContent = ''; showApp(); });
-  $('#logoutBtn')?.addEventListener('click', () => { localStorage.removeItem(KEYS.session); showLogin(); });
+  $('#loginForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const user = $('#loginUser').value.trim(); const password = $('#loginPassword').value.trim();
+    if (!user || !password) { $('#loginError').textContent = 'Enter both username and password to continue.'; return; }
+    const submit = event.currentTarget.querySelector('button[type="submit"]');
+    submit.disabled = true; $('#loginError').textContent = '';
+    try {
+      await api('/auth/login', { method: 'POST', body: JSON.stringify({ username: user, password }) });
+      localStorage.setItem(KEYS.session, user);
+      await showApp();
+    } catch (error) {
+      if (isLocalPreview && /failed to fetch|not configured|404|request failed/i.test(error.message)) {
+        localStorage.setItem(KEYS.session, user); serverMode = false; await showApp();
+      } else $('#loginError').textContent = error.message || 'Unable to sign in.';
+    } finally { submit.disabled = false; }
+  });
+  $('#logoutBtn')?.addEventListener('click', async () => { try { if (serverMode) await api('/auth/logout', { method: 'POST' }); } catch {} localStorage.removeItem(KEYS.session); serverMode = false; showLogin(); });
 
   const panels = $$('.admin-view');
   const setView = view => { panels.forEach(panel => panel.classList.toggle('active', panel.dataset.panel === view)); $$('.admin-nav-item').forEach(item => item.classList.toggle('active', item.dataset.view === view)); const label = { dashboard: 'Overview', bookings: 'Bookings', rates: 'Rates & plans', rooms: 'Rooms', gallery: 'Gallery', settings: 'Settings' }[view] || 'Overview'; $('#viewTitle').textContent = label; $('#adminSidebar').classList.remove('open'); $('#adminOverlay').classList.remove('open'); window.scrollTo({ top: 0, behavior: 'smooth' }); };
@@ -99,20 +160,38 @@
     $$('[data-booking]').forEach(button => button.addEventListener('click', () => openBooking(button.dataset.booking)));
   }
   $('#bookingSearch')?.addEventListener('input', renderBookings); $('#bookingFilter')?.addEventListener('change', renderBookings);
-  function openBooking(id) { const item = bookings.find(booking => booking.id === id); if (!item) return; openModal(`<p class="eyebrow">Booking ${escapeHtml(item.id)}</p><h2 class="modal-title">${escapeHtml(item.name)}</h2><p class="modal-subtitle">${escapeHtml(item.email)} · ${escapeHtml(item.phone)}</p><div class="detail-grid"><div><span>Stay</span><strong>${date(item.checkin)} – ${date(item.checkout)}</strong></div><div><span>Guests</span><strong>${item.guests}</strong></div><div><span>Plan</span><strong>${escapeHtml(item.plan)}</strong></div><div><span>Room</span><strong>${escapeHtml(item.room)}</strong></div><div><span>Amount</span><strong>${money(item.amount)}</strong></div><div><span>Status</span><strong class="status ${item.status}">${item.status}</strong></div></div><div class="modal-actions"><button class="admin-btn admin-btn-quiet" data-modal-action="cancel">Cancel booking</button><button class="admin-btn admin-btn-primary" data-modal-action="confirm">Confirm booking</button></div>`); $$('.admin-modal [data-modal-action]').forEach(button => button.addEventListener('click', () => { const next = button.dataset.modalAction; const target = bookings.find(booking => booking.id === id); if (target) { target.status = next === 'confirm' ? 'confirmed' : 'cancelled'; write(KEYS.bookings, bookings); addActivity(`${target.name} booking ${target.status}`, `Just now · ${target.id}`); closeModal(); renderAll(); toast(`Booking ${target.status}`); } })); }
+  function openBooking(id) { const item = bookings.find(booking => booking.id === id); if (!item) return; openModal(`<p class="eyebrow">Booking ${escapeHtml(item.id)}</p><h2 class="modal-title">${escapeHtml(item.name)}</h2><p class="modal-subtitle">${escapeHtml(item.email)} · ${escapeHtml(item.phone)}</p><div class="detail-grid"><div><span>Stay</span><strong>${date(item.checkin)} – ${date(item.checkout)}</strong></div><div><span>Guests</span><strong>${item.guests}</strong></div><div><span>Plan</span><strong>${escapeHtml(item.plan)}</strong></div><div><span>Room</span><strong>${escapeHtml(item.room)}</strong></div><div><span>Amount</span><strong>${money(item.amount)}</strong></div><div><span>Status</span><strong class="status ${item.status}">${item.status}</strong></div></div><div class="modal-actions"><button class="admin-btn admin-btn-quiet" data-modal-action="cancel">Cancel booking</button><button class="admin-btn admin-btn-primary" data-modal-action="confirm">Confirm booking</button></div>`); $$('.admin-modal [data-modal-action]').forEach(button => button.addEventListener('click', async () => { const next = button.dataset.modalAction; const target = bookings.find(booking => booking.id === id); if (target) { target.status = next === 'confirm' ? 'confirmed' : 'cancelled'; try { if (serverMode) await api('/admin/data', { method: 'PATCH', body: JSON.stringify({ id: target.id, status: target.status }) }); write(KEYS.bookings, bookings); addActivity(`${target.name} booking ${target.status}`, `Just now · ${target.id}`); closeModal(); renderAll(); toast(`Booking ${target.status}`); } catch (error) { toast(error.message || 'Could not update booking'); } } })); }
 
   function renderRates() { $('#rateAdminGrid').innerHTML = rates.map((rate, index) => `<article class="rate-admin-card"><div class="rate-admin-head"><div><span class="rate-admin-code">${escapeHtml(rate.code)}</span><h3>${escapeHtml(rate.name)}</h3><p class="rate-admin-description">${escapeHtml(rate.description)}</p></div><span class="status confirmed">Active</span></div><div class="rate-fields"><label>Nightly price<input class="rate-input" data-rate="${index}" data-field="price" type="number" min="0" value="${rate.price}"></label><label>Extra bed (EB)<input class="rate-input" data-rate="${index}" data-field="eb" type="number" min="0" value="${rate.eb}"></label><label>Child no bed<input class="rate-input" data-rate="${index}" data-field="cnb" type="text" value="${escapeHtml(rate.cnb)}"></label></div></article>`).join(''); }
-  $('#saveRates')?.addEventListener('click', () => { $$('.rate-input').forEach(input => { const rate = rates[Number(input.dataset.rate)]; if (rate) rate[input.dataset.field] = input.dataset.field === 'cnb' ? input.value.trim() : Number(input.value || 0); }); write(KEYS.rates, rates); addActivity('Public meal plan rates published', 'Just now · Rates'); toast('Rates saved and published'); });
-  $('#resetRates')?.addEventListener('click', () => { rates = defaults.rates.map(rate => ({ ...rate })); write(KEYS.rates, rates); renderRates(); toast('Rates reset to the supplied defaults'); });
+  $('#saveRates')?.addEventListener('click', async () => { $$('.rate-input').forEach(input => { const rate = rates[Number(input.dataset.rate)]; if (rate) rate[input.dataset.field] = input.dataset.field === 'cnb' ? input.value.trim() : Number(input.value || 0); }); write(KEYS.rates, rates); try { await saveResource('rates', rates); addActivity('Public meal plan rates published', 'Just now · Rates'); toast('Rates saved and published'); } catch (error) { toast(error.message || 'Could not save rates'); } });
+  $('#resetRates')?.addEventListener('click', async () => { rates = defaults.rates.map(rate => ({ ...rate })); write(KEYS.rates, rates); try { await saveResource('rates', rates); renderRates(); toast('Rates reset to the supplied defaults'); } catch (error) { toast(error.message || 'Could not reset rates'); } });
 
-  function renderRooms() { $('#roomAdminGrid').innerHTML = rooms.map((room, index) => `<article class="room-admin-card"><img src="${escapeHtml(room.image)}" alt="${escapeHtml(room.name)}" loading="lazy"><div class="room-admin-content"><h3>${escapeHtml(room.name)}</h3><p>${escapeHtml(room.type)}</p><div class="room-admin-meta"><span class="availability ${room.available ? 'available' : ''}">${room.available ? 'Available to book' : 'Blocked for booking'}</span><label class="switch"><input type="checkbox" data-room="${index}" ${room.available ? 'checked' : ''} aria-label="${room.name} availability"><span class="slider"></span></label></div></div></article>`).join(''); $$('#roomAdminGrid input[data-room]').forEach(input => input.addEventListener('change', () => { rooms[Number(input.dataset.room)].available = input.checked; write(KEYS.rooms, rooms); renderRooms(); renderMetrics(); toast(`${rooms[Number(input.dataset.room)].name} is ${input.checked ? 'available' : 'blocked'}`); })); }
+  function renderRooms() { $('#roomAdminGrid').innerHTML = rooms.map((room, index) => `<article class="room-admin-card"><img src="${escapeHtml(room.image)}" alt="${escapeHtml(room.name)}" loading="lazy"><div class="room-admin-content"><h3>${escapeHtml(room.name)}</h3><p>${escapeHtml(room.type)}</p><div class="room-admin-meta"><span class="availability ${room.available ? 'available' : ''}">${room.available ? 'Available to book' : 'Blocked for booking'}</span><label class="switch"><input type="checkbox" data-room="${index}" ${room.available ? 'checked' : ''} aria-label="${room.name} availability"><span class="slider"></span></label></div></div></article>`).join(''); $$('#roomAdminGrid input[data-room]').forEach(input => input.addEventListener('change', async () => { rooms[Number(input.dataset.room)].available = input.checked; write(KEYS.rooms, rooms); try { await saveResource('rooms', rooms); renderRooms(); renderMetrics(); toast(`${rooms[Number(input.dataset.room)].name} is ${input.checked ? 'available' : 'blocked'}`); } catch (error) { toast(error.message || 'Could not save room availability'); } })); }
 
-  function renderGallery() { $('#galleryAdminGrid').innerHTML = gallery.map((item, index) => `<figure class="gallery-admin-item"><img src="${escapeHtml(item.src)}" alt="${escapeHtml(item.name)}" loading="lazy"><span>${escapeHtml(item.name)}</span><button class="gallery-remove" data-gallery="${index}" aria-label="Remove ${escapeHtml(item.name)}">×</button></figure>`).join(''); $('#galleryEmpty').hidden = gallery.length > 0; $$('[data-gallery]').forEach(button => button.addEventListener('click', () => { gallery.splice(Number(button.dataset.gallery), 1); write(KEYS.gallery, gallery); renderGallery(); addActivity('Gallery image removed', 'Just now · Gallery'); toast('Gallery image removed'); })); }
-  $('#galleryUpload')?.addEventListener('change', event => { [...event.target.files].forEach(file => { const src = URL.createObjectURL(file); gallery.push({ name: file.name, src }); }); write(KEYS.gallery, gallery); renderGallery(); addActivity(`${event.target.files.length} gallery image${event.target.files.length === 1 ? '' : 's'} added`, 'Just now · Gallery'); toast('Gallery updated for this browser'); event.target.value = ''; });
+  function renderGallery() { $('#galleryAdminGrid').innerHTML = gallery.map((item, index) => `<figure class="gallery-admin-item"><img src="${escapeHtml(item.src)}" alt="${escapeHtml(item.name)}" loading="lazy"><span>${escapeHtml(item.name)}</span><button class="gallery-remove" data-gallery="${index}" aria-label="Remove ${escapeHtml(item.name)}">×</button></figure>`).join(''); $('#galleryEmpty').hidden = gallery.length > 0; $$('[data-gallery]').forEach(button => button.addEventListener('click', async () => { gallery.splice(Number(button.dataset.gallery), 1); write(KEYS.gallery, gallery); try { await saveResource('gallery', gallery); renderGallery(); addActivity('Gallery image removed', 'Just now · Gallery'); toast('Gallery image removed'); } catch (error) { toast(error.message || 'Could not save gallery'); } })); }
+  $('#galleryUpload')?.addEventListener('change', async event => {
+    const files = [...event.target.files];
+    if (!files.length) return;
+    try {
+      for (const file of files) {
+        let src = URL.createObjectURL(file);
+        if (serverMode) {
+          const form = new FormData(); form.append('file', file);
+          const response = await fetch(`${API_BASE}/admin/upload`, { method: 'POST', credentials: 'same-origin', body: form });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(body.error || 'Image upload failed');
+          src = body.src;
+        }
+        gallery.push({ name: file.name, src, created: new Date().toISOString() });
+      }
+      write(KEYS.gallery, gallery); await saveResource('gallery', gallery); renderGallery(); addActivity(`${files.length} gallery image${files.length === 1 ? '' : 's'} added`, 'Just now · Gallery'); toast(serverMode ? 'Gallery uploaded and published' : 'Gallery updated for this browser');
+    } catch (error) { toast(error.message || 'Could not upload gallery image'); }
+    event.target.value = '';
+  });
 
   function renderSettings() { const form = $('#settingsForm'); if (!form) return; Object.entries(settings).forEach(([key, value]) => { const field = form.elements[key]; if (field) field.value = value; }); }
-  $('#saveSettings')?.addEventListener('click', () => { const form = $('#settingsForm'); const next = {}; [...new FormData(form).entries()].forEach(([key, value]) => { next[key] = String(value).trim(); }); settings = { ...settings, ...next }; write(KEYS.settings, settings); addActivity('Property contact settings saved', 'Just now · Settings'); toast('Settings saved'); });
-  $('#clearData')?.addEventListener('click', () => { if (!window.confirm('Clear demo bookings, rates, rooms, gallery, and settings from this browser?')) return; Object.values(KEYS).filter(key => key !== KEYS.session).forEach(key => localStorage.removeItem(key)); rates = defaults.rates.map(rate => ({ ...rate })); rooms = defaults.rooms.map(room => ({ ...room })); gallery = defaults.gallery.map(item => ({ ...item })); settings = { ...defaults.settings }; bookings = defaults.bookings.map(item => ({ ...item })); activity = defaults.activity.map(item => ({ ...item })); renderAll(); toast('Demo data restored'); });
+  $('#saveSettings')?.addEventListener('click', async () => { const form = $('#settingsForm'); const next = {}; [...new FormData(form).entries()].forEach(([key, value]) => { next[key] = String(value).trim(); }); settings = { ...settings, ...next }; write(KEYS.settings, settings); try { await saveResource('settings', settings); addActivity('Property contact settings saved', 'Just now · Settings'); toast('Settings saved'); } catch (error) { toast(error.message || 'Could not save settings'); } });
+  $('#clearData')?.addEventListener('click', () => { if (serverMode) { toast('Connected to Cloudflare — use individual editors to change live data'); return; } if (!window.confirm('Clear demo bookings, rates, rooms, gallery, and settings from this browser?')) return; Object.values(KEYS).filter(key => key !== KEYS.session).forEach(key => localStorage.removeItem(key)); rates = defaults.rates.map(rate => ({ ...rate })); rooms = defaults.rooms.map(room => ({ ...room })); gallery = defaults.gallery.map(item => ({ ...item })); settings = { ...defaults.settings }; bookings = defaults.bookings.map(item => ({ ...item })); activity = defaults.activity.map(item => ({ ...item })); renderAll(); toast('Demo data restored'); });
 
   function exportData() { const payload = { exportedAt: new Date().toISOString(), rates, rooms, gallery, settings, bookings, activity }; const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'new-peony-admin-backup.json'; link.click(); URL.revokeObjectURL(link.href); toast('Backup downloaded'); }
   $$('[data-action="export-data"]').forEach(button => button.addEventListener('click', exportData));
@@ -125,17 +204,18 @@
     const roomOptions = rooms.map(room => `<option>${escapeHtml(room.name)}</option>`).join('');
     const modal = `<p class="eyebrow">Manual reservation</p><h2 class="modal-title">Add a booking</h2><p class="modal-subtitle">Create a reservation on behalf of a guest.</p><form class="modal-form" id="newBookingForm"><label>Guest name<input name="name" required placeholder="Guest name"></label><label>Email<input name="email" type="email" placeholder="guest@example.com"></label><label>Check-in<input name="checkin" type="date" required></label><label>Check-out<input name="checkout" type="date" required></label><label>Meal plan<select name="plan"><option>EP</option><option>CP</option><option>MAPI</option><option>API</option></select></label><label>Room<select name="room">${roomOptions}</select></label><label>Guests<input name="guests" type="number" min="1" value="2"></label><div class="modal-actions"><button type="button" class="admin-btn admin-btn-quiet" data-modal-close>Close</button><button type="submit" class="admin-btn admin-btn-primary">Add booking</button></div></form>`;
     openModal(modal);
-    $('#newBookingForm').addEventListener('submit', event => {
+    $('#newBookingForm').addEventListener('submit', async event => {
       event.preventDefault();
       const values = Object.fromEntries(new FormData(event.currentTarget).entries());
       const rate = rates.find(item => item.code === values.plan) || rates[0];
       const nights = Math.max(1, Math.round((new Date(values.checkout) - new Date(values.checkin)) / 86400000));
-      bookings.unshift({ id: `NP-${1050 + bookings.length}`, ...values, guests: Number(values.guests || 1), amount: Number(rate.price) * nights, status: 'confirmed', created: new Date().toISOString().slice(0, 10) });
-      write(KEYS.bookings, bookings);
-      addActivity(`${values.name} booking added`, 'Just now · Manual');
-      closeModal();
-      renderAll();
-      toast('Booking added');
+      const record = { id: `NP-${1050 + bookings.length}`, ...values, guests: Number(values.guests || 1), amount: Number(rate.price) * nights, status: 'confirmed', created: new Date().toISOString().slice(0, 10) };
+      try {
+        if (serverMode) { const result = await api('/admin/data', { method: 'POST', body: JSON.stringify({ resource: 'booking', record }) }); record.id = result.id || record.id; }
+        bookings.unshift(record); write(KEYS.bookings, bookings);
+        addActivity(`${values.name} booking added`, 'Just now · Manual');
+        closeModal(); renderAll(); toast('Booking added');
+      } catch (error) { toast(error.message || 'Could not add booking'); }
     });
     $('[data-modal-close]')?.addEventListener('click', closeModal);
   }

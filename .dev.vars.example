@@ -1,0 +1,4 @@
+# Copy to .dev.vars for `wrangler pages dev` (never commit real values).
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD_SHA256=replace-with-sha256-hash
+SESSION_SECRET=replace-with-a-long-random-secret

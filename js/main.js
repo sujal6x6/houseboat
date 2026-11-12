@@ -34,11 +34,9 @@ document.addEventListener('DOMContentLoaded', () => {
   /* ----------------------------------------------------------
      1c. PUBLIC RATE SYNC (rooms.html)
      ---------------------------------------------------------- */
-  const savedRates = (() => {
-    try { return JSON.parse(localStorage.getItem('np_rates') || 'null'); } catch { return null; }
-  })();
   const rateCards = document.querySelectorAll('.rate-card');
-  if (savedRates && Array.isArray(savedRates) && rateCards.length) {
+  const applyRates = savedRates => {
+    if (!savedRates || !Array.isArray(savedRates) || !rateCards.length) return;
     const rateOrder = ['EP', 'CP', 'MAPI', 'API'];
     rateCards.forEach((card, index) => {
       const rate = savedRates.find(item => item.code === rateOrder[index]);
@@ -49,6 +47,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (supplements[0]) supplements[0].textContent = `₹${Number(rate.eb || 0).toLocaleString('en-IN')}`;
       if (supplements[1]) supplements[1].textContent = rate.cnb;
     });
+  };
+  const savedRates = (() => { try { return JSON.parse(localStorage.getItem('np_rates') || 'null'); } catch { return null; } })();
+  applyRates(savedRates);
+  if (rateCards.length) {
+    fetch('/api/public/rates', { credentials: 'same-origin' })
+      .then(response => response.ok ? response.json() : Promise.reject(new Error('Rates unavailable')))
+      .then(payload => { if (payload?.rates) { applyRates(payload.rates); localStorage.setItem('np_rates', JSON.stringify(payload.rates)); } })
+      .catch(() => {});
   }
 
   /* ----------------------------------------------------------
@@ -447,6 +453,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (room && room.value) text += `Preferred room: ${room.value}\n`;
         if (message && message.value.trim()) text += `Message: ${message.value.trim()}\n`;
 
+        const bookingPayload = {
+          name: name ? name.value.trim() : '', email: email ? email.value.trim() : '', phone: phone ? phone.value.trim() : '',
+          checkin: checkin ? checkin.value : '', checkout: checkout ? checkout.value : '', guests: guests ? Number(guests.value || 1) : 1,
+          plan: plan ? plan.value : 'EP', room: room ? room.value : ''
+        };
+        // Persist the enquiry when the site is deployed with the Cloudflare API.
+        // WhatsApp remains the immediate guest-facing handoff if the API is unavailable.
+        fetch('/api/public/bookings', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(bookingPayload) }).catch(() => {});
         const whatsappURL = `https://wa.me/919682654524?text=${encodeURIComponent(text)}`;
         window.open(whatsappURL, '_blank');
       }
