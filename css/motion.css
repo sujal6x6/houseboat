@@ -18,18 +18,20 @@ html{scroll-behavior:smooth}
 .nav-link::after,.btn-text .arrow{transition:transform .25s ease,width .25s ease}
 
 /* Framed gallery cards: consistent crops with a slower, layered hover reveal. */
-.room-card-image,.page-card-media{width:100%;height:auto;aspect-ratio:4/3;background:#050606;border:6px solid #050606;box-sizing:border-box}
+.room-card-image,.page-card-media{width:100%;height:auto;aspect-ratio:4/3;background:transparent;border:6px solid transparent;box-sizing:border-box;transition:border-color 1s cubic-bezier(.22,.75,.25,1)}
 .room-card-image img,.page-card-media img{display:block;width:100%;height:100%;object-fit:cover;transform:scale(1);transform-origin:center;will-change:transform;transition:transform 1s cubic-bezier(.16,1,.3,1),filter 1s ease}
 .room-card-overlay{background:linear-gradient(180deg,rgba(0,0,0,.08),rgba(0,0,0,.84));opacity:0;transform:scale(1.035);transition:opacity 1s cubic-bezier(.22,.75,.25,1),transform 1s cubic-bezier(.16,1,.3,1)}
 .room-card-overlay .btn{opacity:0;transform:translate3d(0,18px,0);transition:opacity 1s cubic-bezier(.22,.75,.25,1) .08s,transform 1s cubic-bezier(.16,1,.3,1) .08s}
 .room-card:hover .room-card-image img,.page-card:hover .page-card-media img{transform:scale(1.07);filter:saturate(1.06) contrast(1.03)}
+.room-card:hover .room-card-image,.page-card:hover .page-card-media{border-color:#9aa19f}
 .room-card:hover .room-card-overlay{opacity:1;transform:scale(1)}
 .room-card:hover .room-card-overlay .btn{opacity:1;transform:translate3d(0,0,0)}
-.intro-img-main,.intro-img-secondary{background:#050606;border:6px solid #050606;box-shadow:0 18px 48px rgba(0,0,0,.18);transition:transform 1s cubic-bezier(.16,1,.3,1),box-shadow 1s ease}
+.intro-img-main,.intro-img-secondary{background:transparent;border:6px solid transparent;box-shadow:0 18px 48px rgba(0,0,0,.18);transition:transform 1s cubic-bezier(.16,1,.3,1),box-shadow 1s ease,border-color 1s cubic-bezier(.22,.75,.25,1)}
 .intro-img-secondary{border-width:10px}
 .intro-img-main img,.intro-img-secondary img{display:block;transform:scale(1);will-change:transform;transition:transform 1s cubic-bezier(.16,1,.3,1),filter 1s ease}
 .intro-img-main:hover{transform:translate3d(0,-6px,0);box-shadow:0 26px 60px rgba(0,0,0,.24)}
 .intro-img-secondary:hover{transform:translate3d(0,-8px,0) rotate(1deg);box-shadow:0 24px 54px rgba(0,0,0,.24)}
+.intro-img-main:hover,.intro-img-secondary:hover{border-color:#9aa19f}
 .intro-img-main:hover img,.intro-img-secondary:hover img{transform:scale(1.07);filter:saturate(1.06) contrast(1.03)}
 
 /* Shared lightbox used by the homepage mosaic and full gallery. */
@@ -39,7 +41,7 @@ html{scroll-behavior:smooth}
 .lightbox-overlay.active .lightbox-img{transform:scale(1)}
 .lightbox-close,.lightbox-prev,.lightbox-next{position:absolute;z-index:1;display:grid;place-items:center;width:2.8rem;height:2.8rem;color:#fff;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);border-radius:50%;font-size:1.35rem;line-height:1;transition:background .2s ease,transform .2s ease}
 .lightbox-close{top:1.25rem;right:1.25rem;font-size:1.8rem}.lightbox-prev{left:1.25rem}.lightbox-next{right:1.25rem}.lightbox-close:hover,.lightbox-prev:hover,.lightbox-next:hover{background:var(--np-brass);transform:translateY(-1px)}
-@media(hover:none){.room-card:hover,.page-card:hover{transform:none;box-shadow:0 8px 30px rgba(22,46,40,.06)}.room-card:hover .room-card-image img,.page-card:hover .page-card-media img,.mosaic-item:hover img,.gallery-tile:hover img,.intro-img-main:hover img,.intro-img-secondary:hover img{transform:none;filter:none}.room-card:hover .room-card-overlay{opacity:0;transform:scale(1.035)}.room-card:hover .room-card-overlay .btn{opacity:0;transform:translate3d(0,18px,0)}.intro-img-main:hover,.intro-img-secondary:hover{transform:none;box-shadow:0 18px 48px rgba(0,0,0,.18)}.mosaic-overlay,.gallery-caption{opacity:1;transform:none}}
+@media(hover:none){.room-card:hover,.page-card:hover{transform:none;box-shadow:0 8px 30px rgba(22,46,40,.06)}.room-card:hover .room-card-image,.page-card:hover .page-card-media,.intro-img-main:hover,.intro-img-secondary:hover{border-color:transparent}.room-card:hover .room-card-image img,.page-card:hover .page-card-media img,.mosaic-item:hover img,.gallery-tile:hover img,.intro-img-main:hover img,.intro-img-secondary:hover img{transform:none;filter:none}.room-card:hover .room-card-overlay{opacity:0;transform:scale(1.035)}.room-card:hover .room-card-overlay .btn{opacity:0;transform:translate3d(0,18px,0)}.intro-img-main:hover,.intro-img-secondary:hover{transform:none;box-shadow:0 18px 48px rgba(0,0,0,.18)}.mosaic-overlay,.gallery-caption{opacity:1;transform:none}}
 @media(max-width:620px){.lightbox-overlay{padding:3.5rem 1rem}.lightbox-img{max-width:94vw;max-height:78vh}.lightbox-close{top:.8rem;right:.8rem}.lightbox-prev{left:.6rem}.lightbox-next{right:.6rem}.lightbox-close,.lightbox-prev,.lightbox-next{width:2.45rem;height:2.45rem}}
 
 @media(max-width:700px){
