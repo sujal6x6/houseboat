@@ -1,0 +1,39 @@
+/* Lightweight motion system: only opacity and transform are animated. */
+html{scroll-behavior:smooth}
+
+@keyframes np-rise{from{opacity:0;transform:translate3d(0,18px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+.hero-content .hero-subtitle,.hero-content .hero-title,.hero-content .hero-desc,.hero-content .hero-ctas{opacity:0;animation:np-rise .65s cubic-bezier(.22,.75,.25,1) forwards}
+.hero-content .hero-subtitle{animation-delay:.08s}.hero-content .hero-title{animation-delay:.18s}.hero-content .hero-desc{animation-delay:.3s}.hero-content .hero-ctas{animation-delay:.42s}
+
+.reveal-up,.reveal-left,.reveal-right,.fade-up{opacity:0;transition:opacity .55s ease,transform .55s cubic-bezier(.22,.75,.25,1)}
+.reveal-up{transform:translate3d(0,22px,0)}.fade-up{transform:translate3d(0,18px,0)}.reveal-left{transform:translate3d(-24px,0,0)}.reveal-right{transform:translate3d(24px,0,0)}
+.reveal-up.active,.reveal-left.active,.reveal-right.active,.fade-up.active{opacity:1;transform:translate3d(0,0,0)}
+.delay-1{transition-delay:.08s!important}.delay-2{transition-delay:.16s!important}.delay-3{transition-delay:.24s!important}.delay-4{transition-delay:.32s!important}
+
+.room-card,.page-card{transition:transform 1s cubic-bezier(.16,1,.3,1),box-shadow 1s ease}.room-card-image,.page-card-media,.mosaic-item,.gallery-tile{isolation:isolate;overflow:hidden}.room-card:hover,.page-card:hover{transform:translate3d(0,-7px,0);box-shadow:0 18px 42px rgba(16,38,34,.16)}
+.room-card-image img,.page-card-media img,.mosaic-item img,.gallery-tile img{transition:transform 1s cubic-bezier(.16,1,.3,1)}
+.room-card:hover .room-card-image img,.page-card:hover .page-card-media img,.mosaic-item:hover img,.gallery-tile:hover img{transform:scale(1.06)}
+.intro-img-main,.intro-img-secondary{overflow:hidden}.intro-img-main img,.intro-img-secondary img{transition:transform 1s cubic-bezier(.16,1,.3,1)}.intro-img-main:hover img,.intro-img-secondary:hover img{transform:scale(1.06)}
+.mosaic-overlay,.gallery-caption{transition:opacity 1s ease,transform 1s cubic-bezier(.16,1,.3,1)}.mosaic-overlay{opacity:.86;transform:translate3d(0,6px,0)}.mosaic-item:hover .mosaic-overlay,.gallery-tile:hover .gallery-caption{opacity:1;transform:translate3d(0,0,0)}
+.nav-link::after,.btn-text .arrow{transition:transform .25s ease,width .25s ease}
+
+/* Shared lightbox used by the homepage mosaic and full gallery. */
+.lightbox-overlay{position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;padding:4rem 3.5rem;background:rgba(8,20,18,.92);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .25s ease,visibility .25s ease}
+.lightbox-overlay.active{opacity:1;visibility:visible;pointer-events:auto}
+.lightbox-img{max-width:min(92vw,1100px);max-height:84vh;width:auto;height:auto;object-fit:contain;border-radius:8px;box-shadow:0 24px 80px rgba(0,0,0,.35);transform:scale(.985);transition:transform .25s cubic-bezier(.16,1,.3,1)}
+.lightbox-overlay.active .lightbox-img{transform:scale(1)}
+.lightbox-close,.lightbox-prev,.lightbox-next{position:absolute;z-index:1;display:grid;place-items:center;width:2.8rem;height:2.8rem;color:#fff;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);border-radius:50%;font-size:1.35rem;line-height:1;transition:background .2s ease,transform .2s ease}
+.lightbox-close{top:1.25rem;right:1.25rem;font-size:1.8rem}.lightbox-prev{left:1.25rem}.lightbox-next{right:1.25rem}.lightbox-close:hover,.lightbox-prev:hover,.lightbox-next:hover{background:var(--np-brass);transform:translateY(-1px)}
+@media(hover:none){.room-card:hover,.page-card:hover{transform:none;box-shadow:0 8px 30px rgba(22,46,40,.06)}.room-card:hover .room-card-image img,.page-card:hover .page-card-media img,.mosaic-item:hover img,.gallery-tile:hover img,.intro-img-main:hover img,.intro-img-secondary:hover img{transform:none}.mosaic-overlay,.gallery-caption{opacity:1;transform:none}}
+@media(max-width:620px){.lightbox-overlay{padding:3.5rem 1rem}.lightbox-img{max-width:94vw;max-height:78vh}.lightbox-close{top:.8rem;right:.8rem}.lightbox-prev{left:.6rem}.lightbox-next{right:.6rem}.lightbox-close,.lightbox-prev,.lightbox-next{width:2.45rem;height:2.45rem}}
+
+@media(max-width:700px){
+  .hero-video{display:none}.hero-media{background:url('../images/hero/balcony-sunset.jpeg') center/cover no-repeat}
+  .reveal-left,.reveal-right{transform:translate3d(0,16px,0)}
+}
+
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}.hero-content .hero-subtitle,.hero-content .hero-title,.hero-content .hero-desc,.hero-content .hero-ctas{opacity:1;animation:none}
+  .reveal-up,.reveal-left,.reveal-right,.fade-up{opacity:1;transform:none;transition:none}
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
