@@ -32,6 +32,26 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* ----------------------------------------------------------
+     1c. PUBLIC RATE SYNC (rooms.html)
+     ---------------------------------------------------------- */
+  const savedRates = (() => {
+    try { return JSON.parse(localStorage.getItem('np_rates') || 'null'); } catch { return null; }
+  })();
+  const rateCards = document.querySelectorAll('.rate-card');
+  if (savedRates && Array.isArray(savedRates) && rateCards.length) {
+    const rateOrder = ['EP', 'CP', 'MAPI', 'API'];
+    rateCards.forEach((card, index) => {
+      const rate = savedRates.find(item => item.code === rateOrder[index]);
+      if (!rate) return;
+      const price = card.querySelector('.rate-price');
+      const supplements = card.querySelectorAll('.rate-meta dd');
+      if (price) price.innerHTML = `₹${Number(rate.price || 0).toLocaleString('en-IN')}<small>/night</small>`;
+      if (supplements[0]) supplements[0].textContent = `₹${Number(rate.eb || 0).toLocaleString('en-IN')}`;
+      if (supplements[1]) supplements[1].textContent = rate.cnb;
+    });
+  }
+
+  /* ----------------------------------------------------------
      2. NAVBAR SCROLL EFFECT
      ---------------------------------------------------------- */
   const navbar = document.querySelector('.navbar');
